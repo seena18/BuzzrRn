@@ -1,5 +1,8 @@
 {
   "expo": {
+    "plugins": [
+
+    ],
     "name": "BuzzrRn",
     "slug": "BuzzrRn",
     "version": "1.0.0",
