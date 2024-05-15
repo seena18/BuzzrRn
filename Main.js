@@ -4,7 +4,7 @@ import transform from 'css-to-react-native';
 import { useState, useRef, useEffect } from 'react';
 import DropShadow from "react-native-drop-shadow";
 import { ActivityIndicator } from 'react-native';
-import { RTCPeerConnection, RTCView, mediaDevices, RTCSessionDescription, RTCIceCandidate, MediaStream } from 'react-native-webrtc';
+import { RTCPeerConnection, RTCView, mediaDevices, RTCSessionDescription, RTCIceCandidate, MediaStream } from 'react-native-webrtc-web-shim'
 
 import api from './api';
 import axios from 'axios';
