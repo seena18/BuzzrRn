@@ -2,9 +2,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Pressable, StyleSheet, Text, View, TextInput, TouchableHighlight, TouchableOpacity, Animated, Dimensions } from 'react-native';
 import transform from 'css-to-react-native';
 import { useState, useRef, useEffect } from 'react';
-import DropShadow from "react-native-drop-shadow";
 import { ActivityIndicator } from 'react-native';
-import { RTCPeerConnection, RTCView, mediaDevices, RTCSessionDescription, RTCIceCandidate, MediaStream } from 'react-native-webrtc-web-shim'
+import { RTCPeerConnection, RTCView, mediaDevices, RTCSessionDescription, RTCIceCandidate, MediaStream } from 'react-native-webrtc-web-shim';
 
 import api from './api';
 import axios from 'axios';
@@ -14,7 +13,14 @@ import { db } from './firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { auth } from './firebase';
 import { Defs, Stop, Svg, RadialGradient as SVGRadialGradient, Path, Circle } from 'react-native-svg'
-import RadialGradient from 'react-native-radial-gradient';
+import GreenGlow from "./assets/green glow.svg"
+import GreyGlow from "./assets/black glow.svg"
+import RedGlow from "./assets/red glow.svg"
+import BlueGlow from "./assets/blue glow.svg"
+import InCallManager from 'react-native-incall-manager';
+
+import { SvgUri } from 'react-native-svg';
+
 // import auth from '@react-native-firebase/auth';
 
 export default function Main() {
@@ -22,7 +28,7 @@ export default function Main() {
 
   const [peerId, setPeerId] = useState('');
 
-  const [loggedIn, setLoggedIn] = useState(false)
+  const [loggedIn, setLoggedIn] = useState(true)
   const [phoneNumber, onChangeNumber] = useState('');
 
 
@@ -31,6 +37,8 @@ export default function Main() {
   const [theirMediaStream, setTheirMedia] = useState(undefined);
   const gshadow = useRef()
   const greenanim = useRef()
+  const bluelight = useRef()
+
   const channel = useRef()
 
   const [load, setLoad] = useState(false);
@@ -61,7 +69,9 @@ export default function Main() {
     });
     closeChannel.current = pc.current.createDataChannel('close');
     closeChannel.current.addEventListener('open', event => {
-      Animated.timing(videoOpacity, {
+      gshadow.current.stop()
+      greenanim.current.stop()
+Animated.timing(videoOpacity, {
         toValue: 1,
         duration: 1000,
         useNativeDriver: false,
@@ -71,11 +81,34 @@ export default function Main() {
         duration: 1000,
         useNativeDriver: false,
       }).start()
-      Animated.timing(shadow3opacity, {
-        toValue: 1,
+      Animated.timing(blueLightSize, {
+        toValue: .3 * Dimensions.get('screen').height,
         duration: 1000,
         useNativeDriver: false,
       }).start()
+      Animated.timing(physButtonSize, {
+        toValue: .2 * Dimensions.get('screen').height,
+        duration: 1000,
+        useNativeDriver: false,
+      }).start()
+      bluelight.current = Animated.loop(
+        Animated.sequence(
+
+          [Animated.timing(shadow3opacity, {
+            toValue: 1,
+            duration: 2000,
+            useNativeDriver: false,
+          }), Animated.timing(shadow3opacity, {
+            toValue: 0,
+            duration: 2000,
+            useNativeDriver: false,
+          }),
+
+
+
+          ]
+        ));
+      bluelight.current.start()
       console.log("Opened data channel")
     });
     closeChannel.current.addEventListener('close', event => {
@@ -88,12 +121,16 @@ export default function Main() {
     // Push tracks from local stream to peer connection
     local.getTracks().forEach(track => {
       pc.current.addTrack(track);
+      console.log("my track", track)
+      if (track.kind == 'audio') {
+        local.removeTrack(track)
+      }
     });
     console.log(local)
     // Pull tracks from peer connection, add to remote video stream
     pc.current.ontrack = e => {
       const newStream = new MediaStream();
-      console.log("e", e)
+      console.log("their track", e.track)
       newStream.addTrack(e.track)
       setRemoteStream(newStream);
     };
@@ -216,7 +253,8 @@ export default function Main() {
   const stopOpacity = useRef(new Animated.Value(0)).current;
   const videoOpacity = useRef(new Animated.Value(0)).current;
   const shadow3opacity = useRef(new Animated.Value(0)).current;
-
+  const blueLightSize = useRef(new Animated.Value(.6 * Dimensions.get('screen').height)).current;
+  const physButtonSize = useRef(new Animated.Value(.39 * Dimensions.get('screen').height)).current;
   const shadow2opacity = useRef(new Animated.Value(0)).current;
   const shadow1Radius = useRef(new Animated.Value(10)).current;
   const shadow1Color = useRef(new Animated.Value(0)).current;
@@ -255,7 +293,6 @@ export default function Main() {
   }
 
 
-  const AnimatedDropShadow = Animated.createAnimatedComponent(DropShadow);
   const startSpin = () => {
     Animated.timing(shadow2opacity, {
       toValue: 1,
@@ -349,6 +386,17 @@ export default function Main() {
         alert(error.message)
         // ...
       });
+    if (bluelight.current) bluelight.current.stop()
+    Animated.timing(blueLightSize, {
+      toValue: .6 * Dimensions.get('screen').height,
+      duration: 500,
+      useNativeDriver: false,
+    }).start()
+    Animated.timing(physButtonSize, {
+      toValue: .39 * Dimensions.get('screen').height,
+      duration: 500,
+      useNativeDriver: false,
+    }).start()
     Animated.timing(videoOpacity, {
       toValue: 0,
       duration: 250,
@@ -360,9 +408,11 @@ export default function Main() {
       useNativeDriver: false,
     }).start()
     // closeChannel.current.send('close')
-    closeChannel.current.close()
+    if (closeChannel.current)
+      closeChannel.current.close()
     closeChannel.current = null
-    pc.current.close()
+    if (pc.current)
+      pc.current.close()
     pc.current = null
     gshadow.current.stop()
     greenanim.current.stop()
@@ -461,7 +511,7 @@ export default function Main() {
             }}>
             <View style={{ zIndex: 2, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
 
-              <Animated.View style={styles.initButton}>
+              <Animated.View style={[styles.initButton, { height: physButtonSize, width: physButtonSize }]}>
 
               </Animated.View>
             </View >
@@ -469,24 +519,17 @@ export default function Main() {
             <View style={{ zIndex: 1, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
 
               <Animated.View style={[styles.buttonGreenlight, { top: shadow2height, left: shadow2width, opacity: shadow2opacity }]}>
-                {shadow2opacity != 0 &&
 
-                  <RadialGradient style={{ width: 200, height: 200, opacity: 0.5 }}
-                    colors={['#350078', '#00FFFF', 'transparent']}
-                    stops={[0, 0, 0.5]}
-                    center={[100, 100]}
-                    radius={100}>
+                <GreenGlow />
 
-                  </RadialGradient>
-                }
 
               </Animated.View>
             </View >
 
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
 
-              <Animated.View style={[styles.buttonShadow, { top: shadow1height, left: shadow1width }]}>
-
+              <Animated.View style={[styles.regShadow, { top: shadow1height, left: shadow1width }]}>
+                <GreyGlow />
               </Animated.View>
 
             </View >
@@ -494,63 +537,40 @@ export default function Main() {
             <View style={{ zIndex: 1, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
 
               <Animated.View style={[styles.stopButton, { opacity: stopOpacity }]}>
-                <Svg height="100%" width="100%" >
-                  <Defs>
-                    <SVGRadialGradient
-                      id="grad"
-                      rx='30%'
-                      ry='30%'
-
-                      gradientUnits="userSpaceOnUse">
-                      <Stop offset="0" stopColor="#ff0000" stopOpacity="1" />
-                      <Stop offset="1" stopColor="#ffffff00" stopOpacity=".3" />
-                    </SVGRadialGradient>
-                  </Defs>
-                  <Circle cx="50%" cy="50%" r={.30 * Dimensions.get('screen').height} fill="url(#grad)" />
-                </Svg>
+                <RedGlow />
 
               </Animated.View>
             </View >
             <View style={{ zIndex: 1, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
 
-              <Animated.View style={[styles.buttonGreenlight, { opacity: shadow3opacity }]}>
-                <Svg height="100%" width="100%" >
-                  <Defs>
-                    <SVGRadialGradient
-                      id="grad"
-                      rx='50%'
-                      ry='50%'
-
-                      gradientUnits="userSpaceOnUse">
-                      <Stop offset="0" stopColor="#0000ff" stopOpacity="1" />
-                      <Stop offset="1" stopColor="#ffffff00" stopOpacity="0" />
-                    </SVGRadialGradient>
-                  </Defs>
-                  <Circle cx="50%" cy="50%" r={.30 * Dimensions.get('screen').height} fill="url(#grad)" />
-                </Svg>
+              <Animated.View style={[{ height: blueLightSize, width: blueLightSize, opacity: shadow3opacity }]}>
+                <BlueGlow />
 
               </Animated.View>
             </View >
           </Pressable>
-          <Animated.View style={{ opacity: videoOpacity }}>
-            {remoteStream && <View style={{ height: (.5 * (Dimensions.get('window').height)), width: (1 * (Dimensions.get('window').width)), overflow: 'hidden' }}>
+          <Animated.View style={{ opacity: videoOpacity, flexDirection: "row" }}>
+            {remoteStream && <View style={{ height: (1 * (Dimensions.get('window').height)), width: (.5 * (Dimensions.get('window').width)), overflow: 'hidden' }}>
               <RTCView
 
-                style={{ flex: 2, borderColor: 'black' }}
-                mirror={true}
+
+
                 objectFit={'cover'}
-                streamURL={remoteStream.toURL()}
-                zOrder={1}
+
+                stream={remoteStream}
+                zorder={1}
+                mirror="true"
               />
             </View>}
-            {localStream && <View style={{ height: (.5 * (Dimensions.get('window').height)), width: (1 * (Dimensions.get('window').width)), overflow: 'hidden' }}>
+            {localStream && <View style={{ height: (1 * (Dimensions.get('window').height)), width: (.5 * (Dimensions.get('window').width)), overflow: 'hidden' }}>
               <RTCView
-
-                style={{ flex: 2, borderColor: 'black' }}
-                mirror={true}
+                mirror="true"
                 objectFit={'cover'}
-                streamURL={localStream.toURL()}
-                zOrder={1}
+
+
+
+                stream={localStream}
+                zorder={1}
               />
             </View>}
 
@@ -600,8 +620,6 @@ const styles = StyleSheet.create({
 
   initButton: {
     backgroundColor: '#e0e0e0',
-    width: .39 * Dimensions.get('screen').height,
-    height: .39 * Dimensions.get('screen').height,
     borderRadius: 1 * Dimensions.get('screen').height,
     position: "absolute",
     zIndex: 1
@@ -618,14 +636,23 @@ const styles = StyleSheet.create({
 
 
   },
-  buttonGreenlight: {
-    width: .82 * Dimensions.get('screen').height,
-    height: .82 * Dimensions.get('screen').height,
+  regShadow: {
+    width: .42 * Dimensions.get('screen').height,
+    height: .42 * Dimensions.get('screen').height,
 
 
 
 
   },
+  buttonGreenlight: {
+    width: .44 * Dimensions.get('screen').height,
+    height: .44 * Dimensions.get('screen').height,
+
+
+
+
+  },
+
   searchButton: {
     backgroundColor: '#e0e0e0',
     width: .41 * Dimensions.get('screen').height,
@@ -637,9 +664,9 @@ const styles = StyleSheet.create({
 
   },
   stopButton: {
-    backgroundColor: '#e0e0e0',
-    width: 1 * Dimensions.get('screen').height,
-    height: 1 * Dimensions.get('screen').height,
+    opacity: .5,
+    width: .5 * Dimensions.get('screen').height,
+    height: .5 * Dimensions.get('screen').height,
     borderRadius: 1 * Dimensions.get('screen').height,
 
   },
