@@ -18,7 +18,6 @@ import GreyGlow from "./assets/black glow.svg"
 import RedGlow from "./assets/red glow.svg"
 import BlueGlow from "./assets/blue glow.svg"
 import InCallManager from 'react-native-incall-manager';
-
 import { SvgUri } from 'react-native-svg';
 
 // import auth from '@react-native-firebase/auth';
@@ -69,9 +68,14 @@ export default function Main() {
     });
     closeChannel.current = pc.current.createDataChannel('close');
     closeChannel.current.addEventListener('open', event => {
+      Animated.timing(darkShadowOpacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start()
       gshadow.current.stop()
       greenanim.current.stop()
-Animated.timing(videoOpacity, {
+      Animated.timing(videoOpacity, {
         toValue: 1,
         duration: 1000,
         useNativeDriver: false,
@@ -121,16 +125,12 @@ Animated.timing(videoOpacity, {
     // Push tracks from local stream to peer connection
     local.getTracks().forEach(track => {
       pc.current.addTrack(track);
-      console.log("my track", track)
-      if (track.kind == 'audio') {
-        local.removeTrack(track)
-      }
     });
     console.log(local)
     // Pull tracks from peer connection, add to remote video stream
     pc.current.ontrack = e => {
       const newStream = new MediaStream();
-      console.log("their track", e.track)
+      console.log("e", e)
       newStream.addTrack(e.track)
       setRemoteStream(newStream);
     };
@@ -143,6 +143,11 @@ Animated.timing(videoOpacity, {
   };
 
   useEffect(() => {
+    InCallManager.start({ media: 'audio' }); // audio/video, default: audio
+
+    InCallManager.setSpeakerphoneOn(true)
+    InCallManager.setForceSpeakerphoneOn(true)
+
     startWebcam()
   }, [])
 
@@ -256,6 +261,8 @@ Animated.timing(videoOpacity, {
   const blueLightSize = useRef(new Animated.Value(.6 * Dimensions.get('screen').height)).current;
   const physButtonSize = useRef(new Animated.Value(.39 * Dimensions.get('screen').height)).current;
   const shadow2opacity = useRef(new Animated.Value(0)).current;
+  const darkShadowOpacity = useRef(new Animated.Value(1)).current;
+
   const shadow1Radius = useRef(new Animated.Value(10)).current;
   const shadow1Color = useRef(new Animated.Value(0)).current;
   const [confirm, setConfirm] = useState(null);
@@ -387,6 +394,7 @@ Animated.timing(videoOpacity, {
         // ...
       });
     if (bluelight.current) bluelight.current.stop()
+
     Animated.timing(blueLightSize, {
       toValue: .6 * Dimensions.get('screen').height,
       duration: 500,
@@ -397,8 +405,14 @@ Animated.timing(videoOpacity, {
       duration: 500,
       useNativeDriver: false,
     }).start()
+
     Animated.timing(videoOpacity, {
       toValue: 0,
+      duration: 250,
+      useNativeDriver: false,
+    }).start()
+    Animated.timing(darkShadowOpacity, {
+      toValue: 1,
       duration: 250,
       useNativeDriver: false,
     }).start()
@@ -528,9 +542,10 @@ Animated.timing(videoOpacity, {
 
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
 
-              <Animated.View style={[styles.regShadow, { top: shadow1height, left: shadow1width }]}>
+              <Animated.View style={[styles.regShadow, { top: shadow1height, left: shadow1width, opacity: darkShadowOpacity }]}>
                 <GreyGlow />
               </Animated.View>
+
 
             </View >
 
@@ -549,28 +564,22 @@ Animated.timing(videoOpacity, {
               </Animated.View>
             </View >
           </Pressable>
-          <Animated.View style={{ opacity: videoOpacity, flexDirection: "row" }}>
+          <Animated.View style={{ opacity: videoOpacity }}>
             {remoteStream && <View style={{ height: (1 * (Dimensions.get('window').height)), width: (.5 * (Dimensions.get('window').width)), overflow: 'hidden' }}>
               <RTCView
 
-
-
-                objectFit={'cover'}
+                mirror="true"
 
                 stream={remoteStream}
-                zorder={1}
-                mirror="true"
+
               />
             </View>}
-            {localStream && <View style={{ height: (1 * (Dimensions.get('window').height)), width: (.5 * (Dimensions.get('window').width)), overflow: 'hidden' }}>
+            {localStream && <View style={{ height: (1* (Dimensions.get('window').height)), width: (.5 * (Dimensions.get('window').width)), overflow: 'hidden' }}>
               <RTCView
-                mirror="true"
-                objectFit={'cover'}
 
+mirror="true"
 
-
-                stream={localStream}
-                zorder={1}
+stream={localStream}
               />
             </View>}
 
