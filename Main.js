@@ -143,10 +143,6 @@ export default function Main() {
   };
 
   useEffect(() => {
-    InCallManager.start({ media: 'audio' }); // audio/video, default: audio
-
-    InCallManager.setSpeakerphoneOn(true)
-    InCallManager.setForceSpeakerphoneOn(true)
 
     startWebcam()
   }, [])
