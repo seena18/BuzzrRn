@@ -10,7 +10,7 @@ import axios from 'axios';
 import SocketIOClient from 'socket.io-client'
 import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { signInAnonymously } from 'firebase/auth';
+import { signInAnonymously, signInWithPhoneNumber, onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
 import { Defs, Stop, Svg, RadialGradient as SVGRadialGradient, Path, Circle } from 'react-native-svg'
 import GreenGlow from "./assets/green glow.svg"
@@ -19,8 +19,7 @@ import RedGlow from "./assets/red glow.svg"
 import BlueGlow from "./assets/blue glow.svg"
 import InCallManager from 'react-native-incall-manager';
 import { SvgUri } from 'react-native-svg';
-
-// import auth from '@react-native-firebase/auth';
+import { ApplicationVerifier } from 'firebase/auth';
 
 export default function Main() {
 
@@ -33,12 +32,18 @@ export default function Main() {
 
   const [p, setPeer] = useState(undefined);
 
-  const [theirMediaStream, setTheirMedia] = useState(undefined);
+  const [seconds, setSeconds] = useState(0);
   const gshadow = useRef()
   const greenanim = useRef()
   const bluelight = useRef()
+  const secs = useRef()
+  const timer = useRef()
+
+
 
   const channel = useRef()
+  const theirstream = useRef()
+  const mystream = useRef()
 
   const [load, setLoad] = useState(false);
 
@@ -68,6 +73,7 @@ export default function Main() {
     });
     closeChannel.current = pc.current.createDataChannel('close');
     closeChannel.current.addEventListener('open', event => {
+      setSeconds(10)
       Animated.timing(darkShadowOpacity, {
         toValue: 0,
         duration: 250,
@@ -85,34 +91,18 @@ export default function Main() {
         duration: 1000,
         useNativeDriver: false,
       }).start()
+
+
+      Animated.timing(shadow3opacity, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: false,
+      }).start()
       Animated.timing(blueLightSize, {
-        toValue: .3 * Dimensions.get('screen').height,
-        duration: 1000,
+        toValue: .43 * Dimensions.get('screen').height,
+        duration: 10000,
         useNativeDriver: false,
       }).start()
-      Animated.timing(physButtonSize, {
-        toValue: .2 * Dimensions.get('screen').height,
-        duration: 1000,
-        useNativeDriver: false,
-      }).start()
-      bluelight.current = Animated.loop(
-        Animated.sequence(
-
-          [Animated.timing(shadow3opacity, {
-            toValue: 1,
-            duration: 2000,
-            useNativeDriver: false,
-          }), Animated.timing(shadow3opacity, {
-            toValue: 0,
-            duration: 2000,
-            useNativeDriver: false,
-          }),
-
-
-
-          ]
-        ));
-      bluelight.current.start()
       console.log("Opened data channel")
     });
     closeChannel.current.addEventListener('close', event => {
@@ -120,11 +110,14 @@ export default function Main() {
       stopButton()
     });
 
-    setLocalStream(local);
+    mystream.current = local;
     // setRemoteStream(remote);
     // Push tracks from local stream to peer connection
     local.getTracks().forEach(track => {
       pc.current.addTrack(track);
+      // if(track.kind=='audio'){
+      //   local.removeTrack(track)
+      // }
     });
     console.log(local)
     // Pull tracks from peer connection, add to remote video stream
@@ -132,14 +125,14 @@ export default function Main() {
       const newStream = new MediaStream();
       console.log("e", e)
       newStream.addTrack(e.track)
-      setRemoteStream(newStream);
+      theirstream.current = newStream
     };
 
-    pc.current.onaddstream = event => {
-      if (remote._tracks.length == 2) {
-        setRemoteStream(remote)
-      }
-    };
+    // pc.current.onaddstream = event => {
+    //   if (remote._tracks.length == 2) {
+    //     setRemoteStream(remote)
+    //   }
+    // };
   };
 
   useEffect(() => {
@@ -150,8 +143,52 @@ export default function Main() {
 
     startWebcam()
   }, [])
+  useEffect(() => {
+    if (seconds == 10) {
+      secs.current = 10
+
+      timer.current = setInterval(function run() {
+        if (secs.current >= 0) {
+          setSeconds(secs.current)
+          secs.current = secs.current - 1
+          console.log(secs.current)
+        }
+        else {
+          Animated.timing(blueLightSize, {
+            toValue: .3 * Dimensions.get('screen').height,
+            duration: 1000,
+            useNativeDriver: false,
+          }).start()
+          Animated.timing(physButtonSize, {
+            toValue: .2 * Dimensions.get('screen').height,
+            duration: 1000,
+            useNativeDriver: false,
+          }).start()
+          bluelight.current = Animated.loop(
+            Animated.sequence(
+
+              [Animated.timing(shadow3opacity, {
+                toValue: 1,
+                duration: 2000,
+                useNativeDriver: false,
+              }), Animated.timing(shadow3opacity, {
+                toValue: 0,
+                duration: 2000,
+                useNativeDriver: false,
+              }),
 
 
+
+              ]
+            ));
+          bluelight.current.start()
+          setLocalStream(mystream.current)
+          setRemoteStream(theirstream.current)
+          clearInterval(timer.current)
+        }
+      }, 1000)
+    }
+  }, [seconds])
 
 
   const startCall = async (channelDoc) => {
@@ -262,9 +299,11 @@ export default function Main() {
   const physButtonSize = useRef(new Animated.Value(.39 * Dimensions.get('screen').height)).current;
   const shadow2opacity = useRef(new Animated.Value(0)).current;
   const darkShadowOpacity = useRef(new Animated.Value(1)).current;
+  const rect1pos = useRef(new Animated.Value(.5 * Dimensions.get('screen').height)).current;
 
   const shadow1Radius = useRef(new Animated.Value(10)).current;
   const shadow1Color = useRef(new Animated.Value(0)).current;
+
   const [confirm, setConfirm] = useState(null);
 
   // verification code (OTP - One-Time-Passcode)
@@ -280,14 +319,15 @@ export default function Main() {
     }
   }
 
-  // useEffect(() => {
-  //   const subscriber = auth().onAuthStateChanged(onAuthStateChanged);
-  //   return subscriber; // unsubscribe on unmount
-  // }, []);
+  useEffect(() => {
+    const subscriber = onAuthStateChanged(onAuthStateChanged);
+    return subscriber; // unsubscribe on unmount
+  }, []);
 
   // Handle the button press
-  async function signInWithPhoneNumber(phoneNumber) {
-    const confirmation = await auth().signInWithPhoneNumber(phoneNumber);
+  async function phoneSignIn(phoneNumber) {
+    const verifier = new ApplicationVerifier();
+    const confirmation = await signInWithPhoneNumber(auth, phoneNumber,);
     setConfirm(confirmation);
   }
 
@@ -295,9 +335,14 @@ export default function Main() {
     try {
       await confirm.confirm(code);
     } catch (error) {
-      console.log('Invalid code.');
+      alert('Invalid code.');
     }
   }
+
+
+
+
+
 
 
   const startSpin = () => {
@@ -393,8 +438,11 @@ export default function Main() {
         alert(error.message)
         // ...
       });
-    if (bluelight.current) bluelight.current.stop()
-
+    if (bluelight.current)
+      bluelight.current.stop()
+    clearInterval(timer.current)
+    setRemoteStream(null)
+    setLocalStream(null)
     Animated.timing(blueLightSize, {
       toValue: .6 * Dimensions.get('screen').height,
       duration: 500,
@@ -562,7 +610,17 @@ export default function Main() {
                 <BlueGlow />
 
               </Animated.View>
+
+
             </View >
+            {/* <View style={{ zIndex: 1, }}>
+
+              <Animated.View style={[{ bottom: rect1pos, left: "50%", height: blueLightSize, width: .3 * Dimensions.get('screen').height, backgroundColor: '#e0e0e0' }]}>
+
+
+              </Animated.View>
+
+            </View > */}
           </Pressable>
           <Animated.View style={{ opacity: videoOpacity }}>
             {remoteStream && <View style={{ height: (.5 * (Dimensions.get('window').height)), width: (1 * (Dimensions.get('window').width)), overflow: 'hidden' }}>
@@ -597,7 +655,7 @@ export default function Main() {
           <Text style={styles.logo}>Buzzr.</Text>
           <TextInput
             style={styles.input}
-            onChangeText={(t) => txtChg(t)}
+            onChangeText={(t) => onChangeNumber(t)}
             value={phoneNumber}
             placeholder='Phone Number'
             placeholderTextColor='rgba(0, 0, 0, .5)'
@@ -608,7 +666,8 @@ export default function Main() {
           {load ? <ActivityIndicator style={{
             marginTop: (.025 * (Dimensions.get('window').width + 1400)),
           }} /> : <Pressable style={styles.button} onPress={() => {
-            setLoggedIn(true)
+            onChangeNumber('')
+            phoneSignIn('+1 916-705-8486')
           }}>
             <Text style={styles.loginButton}>Send Login Code.</Text>
           </Pressable>}
@@ -616,7 +675,8 @@ export default function Main() {
 
 
 
-        </View >}
+        </View >
+      }
 
     </View >
   );
