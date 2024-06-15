@@ -7,27 +7,25 @@ import { RTCPeerConnection, RTCView, mediaDevices, RTCSessionDescription, RTCIce
 
 import api from './api';
 import axios from 'axios';
-import SocketIOClient from 'socket.io-client'
+
 import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { signInAnonymously, signInWithPhoneNumber, onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
-import { Defs, Stop, Svg, RadialGradient as SVGRadialGradient, Path, Circle } from 'react-native-svg'
 import GreenGlow from "./assets/green glow.svg"
 import GreyGlow from "./assets/black glow.svg"
 import RedGlow from "./assets/red glow.svg"
 import BlueGlow from "./assets/blue glow.svg"
 import InCallManager from 'react-native-incall-manager';
-import { SvgUri } from 'react-native-svg';
-import { ApplicationVerifier } from 'firebase/auth';
 
 export default function Main() {
 
 
   const [peerId, setPeerId] = useState('');
 
-  const [loggedIn, setLoggedIn] = useState(true)
+  const [loggedIn, setLoggedIn] = useState(false)
   const [phoneNumber, onChangeNumber] = useState('');
+  const [formatted, onFormattedNumber] = useState('');
 
 
   const [p, setPeer] = useState(undefined);
@@ -190,17 +188,16 @@ export default function Main() {
     }
   }, [seconds])
 
-
   const startCall = async (channelDoc) => {
     console.log("creating room (startcall)")
-    const offerCandidates = collection(channelDoc, 'offerCandidates');
-    const answerCandidates = collection(channelDoc, 'answerCandidates');
+    const offerCandidates = channelDoc.collection('offerCandidates');
+    const answerCandidates = channelDoc.collection('answerCandidates');
 
 
 
     pc.current.onicecandidate = async event => {
       if (event.candidate) {
-        await addDoc(offerCandidates, event.candidate.toJSON());
+        await offerCandidates.add(event.candidate.toJSON());
       }
     };
 
@@ -213,10 +210,10 @@ export default function Main() {
       type: offerDescription.type,
     };
 
-    await setDoc(channelDoc, { offer })
+    await channelDoc.set({ offer })
 
     // Listen for remote answer
-    onSnapshot(channelDoc,
+    channelDoc.onSnapshot(
       (snapshot => {
         const data = snapshot.data();
         if (!pc.current.currentRemoteDescription && data?.answer) {
@@ -226,7 +223,7 @@ export default function Main() {
       }))
 
     // When answered, add candidate to peer connection
-    onSnapshot(answerCandidates,
+    answerCandidates.onSnapshot(
       (snapshot => {
         snapshot.docChanges().forEach(change => {
           if (change.type === 'added') {
@@ -239,17 +236,17 @@ export default function Main() {
   const joinCall = async (channel) => {
     console.log("joining room (joincall)")
 
-    const channelDoc = doc((collection(db, 'channels')), channel)
-    const offerCandidates = collection(channelDoc, 'offerCandidates')
-    const answerCandidates = collection(channelDoc, 'answerCandidates');
+    const channelDoc = db.collection('channels').doc(channel)
+    const offerCandidates = channelDoc.collection('offerCandidates')
+    const answerCandidates = channelDoc.collection('answerCandidates');
 
     pc.current.onicecandidate = async event => {
       if (event.candidate) {
-        await addDoc(answerCandidates, event.candidate.toJSON());
+        await answerCandidates.add(event.candidate.toJSON());
       }
     };
 
-    const channelDocument = await getDoc(channelDoc);
+    const channelDocument = await channelDoc.get();
     const channelData = channelDocument.data();
     const offerDescription = channelData.offer;
     await pc.current.setRemoteDescription(
@@ -264,9 +261,9 @@ export default function Main() {
       sdp: answerDescription.sdp,
     };
 
-    await updateDoc(channelDoc, { answer });
+    await channelDoc.update({ answer });
 
-    onSnapshot(offerCandidates, (snapshot => {
+    offerCandidates.onSnapshot((snapshot => {
       snapshot.docChanges().forEach(change => {
         if (change.type === 'added') {
           const data = change.doc.data();
@@ -326,8 +323,8 @@ export default function Main() {
 
   // Handle the button press
   async function phoneSignIn(phoneNumber) {
-    const verifier = new ApplicationVerifier();
-    const confirmation = await signInWithPhoneNumber(auth, phoneNumber,);
+    const confirmation = await auth.signInWithPhoneNumber(phoneNumber);
+    console.log("confirmation", confirmation)
     setConfirm(confirmation);
   }
 
@@ -341,7 +338,35 @@ export default function Main() {
 
 
 
+  function formatPhoneNumber(phoneNumberString) {
+    if (phoneNumberString[phoneNumberString.length - 1] == '-') {
+      if (phoneNumberString[phoneNumberString.length - 2] == ')') {
+        onFormattedNumber(phoneNumberString.substr(1, 3))
+      }
+      else onFormattedNumber(phoneNumberString.substr(0, phoneNumberString.length - 1))
+    }
+    else if (phoneNumberString.length <= 14) {
+      onChangeNumber(phoneNumberString)
+      onFormattedNumber(phoneNumberString)
 
+      if (phoneNumberString.length == 4) {
+
+        onFormattedNumber('(' + phoneNumberString.substr(0, 3) + ')-' + phoneNumberString.substr(3)
+        )
+
+      }
+      if (phoneNumberString.length == 10) {
+
+        onFormattedNumber(phoneNumberString.substr(0, 9) + '-' + phoneNumberString.substr(9)
+        )
+
+      }
+
+
+
+
+    }
+  }
 
 
 
@@ -514,17 +539,18 @@ export default function Main() {
   async function enterQueue() {
     console.log('notsignedin')
 
-    signInAnonymously(auth)
+    auth.signInAnonymously()
       .then(async () => {
         console.log('signedin')
         // Signed in..
         let docRef
-        docRef = await addDoc(collection(db, "channels"), {})
+        docRef = await db.collection("channels").add({})
+
         channel.current = docRef.id
         axios.post(`${api}rooms/`, { peerId: docRef.id }).then(res => {
           console.log('data', res)
           if (res.data.connectTo != docRef.id) {
-            deleteDoc(docRef)
+            docRef.delete()
             channel.current = res.data.connectTo
             joinCall(res.data.connectTo)
           }
@@ -655,8 +681,8 @@ export default function Main() {
           <Text style={styles.logo}>Buzzr.</Text>
           <TextInput
             style={styles.input}
-            onChangeText={(t) => onChangeNumber(t)}
-            value={phoneNumber}
+            onChangeText={(t) => formatPhoneNumber(t)}
+            value={formatted}
             placeholder='Phone Number'
             placeholderTextColor='rgba(0, 0, 0, .5)'
             textAlign='center'

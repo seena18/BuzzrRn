@@ -1,7 +1,17 @@
 {
   "expo": {
     "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
 
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
     ],
     "name": "BuzzrRn",
     "slug": "BuzzrRn",
@@ -18,6 +28,7 @@
       "**/*"
     ],
     "ios": {
+      "googleServicesFile": "./GoogleService-Info.plist",
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.BuzzrRn"
     },
