@@ -1,30 +1,51 @@
 import { StatusBar } from 'expo-status-bar';
-import { Pressable, StyleSheet, Text, View, TextInput, TouchableHighlight, TouchableOpacity, Animated, Dimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, TextInput, TouchableHighlight, TouchableOpacity, Animated, Dimensions, Settings } from 'react-native';
+import ReportMenu from './reportmenu';
 import transform from 'css-to-react-native';
 import { useState, useRef, useEffect } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { RTCPeerConnection, RTCView, mediaDevices, RTCSessionDescription, RTCIceCandidate, MediaStream } from 'react-native-webrtc';
-
+import { Icon } from 'react-native-elements'
+import Chip from './chip';
 import api from './api';
 import axios from 'axios';
 
 import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { signInAnonymously, signInWithPhoneNumber, onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
 import GreenGlow from "./assets/green glow.svg"
 import GreyGlow from "./assets/black glow.svg"
 import RedGlow from "./assets/red glow.svg"
 import BlueGlow from "./assets/blue glow.svg"
 import InCallManager from 'react-native-incall-manager';
+import { AppleButton } from '@invertase/react-native-apple-authentication';
+import { appleAuth } from '@invertase/react-native-apple-authentication';
+import CodeCells from './codecells/codecells';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { Button } from 'react-native';
+import { AuthCredential } from 'firebase/auth';
+import { GoogleSigninButton } from "@react-native-google-signin/google-signin";
+import SignInButton from './signinbutton';
 
+import SettingsMenu from './settings';
 export default function Main() {
 
-
+  GoogleSignin.configure({
+    webClientId: '711844652850-b3g9nrm7d1b0qbj78hosvers8g6hutlg.apps.googleusercontent.com',
+  });
   const [peerId, setPeerId] = useState('');
-
+  const [idle, setIdle] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [openSettings, setOpenSettings] = useState(null);
   const [loggedIn, setLoggedIn] = useState(false)
   const [phoneNumber, onChangeNumber] = useState('');
+  const [name, onChangeName] = useState('');
+  const [interests, onChangeInterests] = useState([]);
+  const [interestText, onChangeInterestText] = useState("");
+  const [newUser, setNewUser] = useState(true);
+  const [disableButton, setDisableButton] = useState(false);
+  const [logoutAnim, setLogoutAnim] = useState(false);
+
   const [formatted, onFormattedNumber] = useState('');
 
 
@@ -44,6 +65,7 @@ export default function Main() {
   const mystream = useRef()
 
   const [load, setLoad] = useState(false);
+  const [phone, setPhone] = useState(false);
 
   const [remoteStream, setRemoteStream] = useState(null);
   const [localStream, setLocalStream] = useState(null);
@@ -142,6 +164,63 @@ export default function Main() {
     startWebcam()
   }, [])
   useEffect(() => {
+    if (phone) {
+      loginOff()
+      backButtonOn()
+      phoneOn()
+    }
+    else {
+
+      backButtonOff();
+      phoneOff();
+
+    }
+
+  }, [phone])
+  useEffect(() => {
+    if (logoutAnim) {
+      compressMenu()
+      hideSettings()
+      hidemenu()
+      Animated.sequence(
+        [Animated.timing(stopOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: false,
+        }),
+        Animated.timing(stopOpacity, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: false,
+        }),
+
+
+
+        ]
+      ).start(() => {
+        expandMenu(() => {
+          setCode("")
+          setMenuOpen(false)
+          setNewUser(true)
+          setPhone(false)
+          setConfirm(false)
+          setOpenSettings(false)
+          setLoggedIn(false)
+          logoOn()
+          loginOn()
+        })
+
+      })
+
+    }
+    else {
+
+
+    }
+
+  }, [logoutAnim])
+
+  useEffect(() => {
     if (seconds == 10) {
       secs.current = 10
 
@@ -157,7 +236,12 @@ export default function Main() {
             duration: 1000,
             useNativeDriver: false,
           }).start()
-          Animated.timing(physButtonSize, {
+          Animated.timing(physButtonSizeHeight, {
+            toValue: .2 * Dimensions.get('screen').height,
+            duration: 1000,
+            useNativeDriver: false,
+          }).start()
+          Animated.timing(physButtonSizeWidth, {
             toValue: .2 * Dimensions.get('screen').height,
             duration: 1000,
             useNativeDriver: false,
@@ -211,7 +295,6 @@ export default function Main() {
     };
 
     await channelDoc.set({ offer })
-
     // Listen for remote answer
     channelDoc.onSnapshot(
       (snapshot => {
@@ -232,6 +315,8 @@ export default function Main() {
           }
         });
       }))
+    setDisableButton(false)
+
   };
   const joinCall = async (channel) => {
     console.log("joining room (joincall)")
@@ -271,6 +356,8 @@ export default function Main() {
         }
       });
     }))
+    setDisableButton(false)
+
   };
 
 
@@ -292,16 +379,133 @@ export default function Main() {
   const stopOpacity = useRef(new Animated.Value(0)).current;
   const videoOpacity = useRef(new Animated.Value(0)).current;
   const shadow3opacity = useRef(new Animated.Value(0)).current;
-  const blueLightSize = useRef(new Animated.Value(.6 * Dimensions.get('screen').height)).current;
-  const physButtonSize = useRef(new Animated.Value(.39 * Dimensions.get('screen').height)).current;
+  const blueLightSize = useRef(new Animated.Value(0 * Dimensions.get('screen').height)).current;
+  const physButtonSizeHeight = useRef(new Animated.Value(.39 * Dimensions.get('screen').height)).current;
+
+  const physButtonSizeWidth = useRef(new Animated.Value(.39 * Dimensions.get('screen').height)).current;
+  const physButtonRadius = useRef(new Animated.Value(1 * Dimensions.get('screen').height)).current;
+  const physButtonOpacity = useRef(new Animated.Value(0)).current;
+
   const shadow2opacity = useRef(new Animated.Value(0)).current;
+  const settingOpacity = useRef(new Animated.Value(0)).current;
+  const menuOpacity = useRef(new Animated.Value(0)).current;
+
   const darkShadowOpacity = useRef(new Animated.Value(1)).current;
   const rect1pos = useRef(new Animated.Value(.5 * Dimensions.get('screen').height)).current;
 
   const shadow1Radius = useRef(new Animated.Value(10)).current;
   const shadow1Color = useRef(new Animated.Value(0)).current;
 
-  const [confirm, setConfirm] = useState(null);
+  const loginOpacity = useRef(new Animated.Value(0)).current;
+  const phonenumOpacity = useRef(new Animated.Value(0)).current;
+  const confirmCodeOpacity = useRef(new Animated.Value(0)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const backButtonOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    var loop = Animated.loop(Animated.sequence([
+      Animated.timing(blueLightSize, {
+        toValue: .6 * Dimensions.get('screen').height,
+        duration: 1000,
+        useNativeDriver: false,
+      }),
+      Animated.timing(blueLightSize, {
+        toValue: 0 * Dimensions.get('screen').height,
+        duration: 1000,
+        useNativeDriver: false,
+      })
+    ]
+    ))
+    loop.start()
+
+
+
+    setTimeout(() => {
+      loop.stop()
+      expandMenu()
+      logoOn()
+      loginOn()
+    }, 2000)
+
+
+  }, [])
+  function loginOff(user = undefined) {
+    Animated.timing(loginOpacity, {
+      toValue: 0,
+      duration: 500,
+      useNativeDriver: false,
+    }).start(() => {
+
+    })
+
+  }
+
+  function loginOn() {
+    Animated.timing(loginOpacity, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: false,
+    }).start()
+  }
+  function backButtonOff() {
+    Animated.timing(backButtonOpacity, {
+      toValue: 0,
+      duration: 500,
+      useNativeDriver: false,
+    }).start()
+  }
+
+  function backButtonOn() {
+    Animated.timing(backButtonOpacity, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: false,
+    }).start()
+  }
+  function logoOff() {
+    Animated.timing(logoOpacity, {
+      toValue: 0,
+      duration: 500,
+      useNativeDriver: false,
+    }).start()
+  }
+
+  function logoOn() {
+    Animated.timing(logoOpacity, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: false,
+    }).start()
+  }
+  function phoneOff() {
+    Animated.timing(phonenumOpacity, {
+      toValue: 0,
+      duration: 500,
+      useNativeDriver: false,
+    }).start()
+  }
+  function phoneOn() {
+    Animated.timing(phonenumOpacity, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: false,
+    }).start()
+  }
+  function confirmOff() {
+    Animated.timing(confirmCodeOpacity, {
+      toValue: 0,
+      duration: 500,
+      useNativeDriver: false,
+    }).start()
+  }
+  function confirmOn() {
+    Animated.timing(confirmCodeOpacity, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: false,
+    }).start()
+  }
+  const [confirm, setConfirm] = useState(false);
 
   // verification code (OTP - One-Time-Passcode)
   const [code, setCode] = useState('');
@@ -309,10 +513,7 @@ export default function Main() {
   // Handle login
   function onAuthStateChanged(user) {
     if (user) {
-      // Some Android devices can automatically process the verification code (OTP) message, and the user would NOT need to enter the code.
-      // Actually, if he/she tries to enter it, he/she will get an error message because the code was already used in the background.
-      // In this function, make sure you hide the component(s) for entering the code and/or navigate away from this screen.
-      // It is also recommended to display a message to the user informing him/her that he/she has successfully logged in.
+      console.log("user", user)
     }
   }
 
@@ -320,19 +521,83 @@ export default function Main() {
     const subscriber = onAuthStateChanged(onAuthStateChanged);
     return subscriber; // unsubscribe on unmount
   }, []);
+  useEffect(() => {
+    if (!newUser) {
+      console.log('show intro')
+      compressMenu()
+      setOpenSettings(null)
+      showSettings()
+    }
+  }, [newUser]);
+  useEffect(() => {
 
+    if (loggedIn && loggedIn != true) {
+      setLogoutAnim(false)
+      loggedIn.user.getIdToken().then(token => {
+        axios.get(`${api}users/${loggedIn.user.uid}`, { headers: { "Authorization": `Bearer ${token}` } }).then(res => {
+          console.log(res.data)
+          onChangeName(res.data.user.name)
+          onChangeInterests(res.data.user.interests)
+          if (res.data.user.name == "") {
+
+            setMenuOpen(true)
+            setOpenSettings('settings')
+            showmenu()
+          }
+          else {
+            console.log('new user false')
+            setNewUser(false)
+          }
+        }).catch(err => {
+          alert(err)
+        })
+      }).catch(err => {
+        alert(err)
+      })
+
+
+    }
+
+  }, [loggedIn]);
+  useEffect(() => {
+    if (menuOpen) {
+      expandMenu()
+      showmenu()
+      hideSettings()
+    }
+    else {
+      compressMenu()
+      setOpenSettings(null)
+
+      hidemenu()
+
+
+    }
+  }, [menuOpen]);
   // Handle the button press
   async function phoneSignIn(phoneNumber) {
-    const confirmation = await auth.signInWithPhoneNumber(phoneNumber);
-    console.log("confirmation", confirmation)
-    setConfirm(confirmation);
+
+    auth().signInWithPhoneNumber(phoneNumber).then(confirmation => {
+      console.log("confirmation", confirmation)
+      phoneOff()
+      backButtonOff()
+      confirmOn()
+      setConfirm(confirmation);
+    })
+
   }
 
   async function confirmCode() {
     try {
-      await confirm.confirm(code);
+      let user = await confirm.confirm(code);
+      logoOff()
+      confirmOff()   
+      setTimeout(()=>{      setLoggedIn(user)
+      },500) 
+           
+     
     } catch (error) {
-      alert('Invalid code.');
+      alert('Invalrid code.');
     }
   }
 
@@ -376,7 +641,11 @@ export default function Main() {
       duration: 1000,
       useNativeDriver: false,
     }).start()
-
+    Animated.timing(settingOpacity, {
+      toValue: 0,
+      duration: 1000,
+      useNativeDriver: false,
+    }).start()
     gshadow.current = Animated.loop(
       Animated.sequence(
 
@@ -443,37 +712,32 @@ export default function Main() {
     greenanim.current.start()
   };
 
-  const stopButton = () => {
-    signInAnonymously(auth)
-      .then(async () => {
-        axios.delete(`${api}rooms/${channel.current}`).then(res => {
+  const stopButton = async () => {
+
+    setIdle(true)
 
 
-        }).catch((error) => {
-          if (error && error.response && error.response.data && error.response.data.message)
-            alert(error.response.data.message)
-          else if (error && error.message)
-            alert(error.message)
-
-        });
-      })
-      .catch((error) => {
-        const errorCode = error.code;
-        const errorMessage = error.message;
-        alert(error.message)
-        // ...
-      });
     if (bluelight.current)
       bluelight.current.stop()
     clearInterval(timer.current)
     setRemoteStream(null)
     setLocalStream(null)
+    Animated.timing(settingOpacity, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: false,
+    }).start()
     Animated.timing(blueLightSize, {
       toValue: .6 * Dimensions.get('screen').height,
       duration: 500,
       useNativeDriver: false,
     }).start()
-    Animated.timing(physButtonSize, {
+    Animated.timing(physButtonSizeHeight, {
+      toValue: .39 * Dimensions.get('screen').height,
+      duration: 500,
+      useNativeDriver: false,
+    }).start()
+    Animated.timing(physButtonSizeWidth, {
       toValue: .39 * Dimensions.get('screen').height,
       duration: 500,
       useNativeDriver: false,
@@ -534,48 +798,213 @@ export default function Main() {
 
       ]
     ).start()
+    channel.current.collection('answerCandidates').get().then((querySnapshot) => {
+      Promise.all(querySnapshot.docs.map((d) => d.ref.delete()));
+    });
+    channel.current.collection('offerCandidates').get().then((querySnapshot) => {
+      Promise.all(querySnapshot.docs.map((d) => d.ref.delete()));
+    });
+
+    channel.current.delete()
+    channel.current = null
     startWebcam()
   };
   async function enterQueue() {
-    console.log('notsignedin')
+    setIdle(false)
+    console.log('signedin')
+    // Signed in..
+    let docRef
+    db.collection("channels")
+      .get()
+      .then(querySnapshot => {
+        if (!querySnapshot.empty) {
+          //We know there is one doc in the querySnapshot
+          const queryDocumentSnapshot = querySnapshot.docs[0];
+          channel.current = queryDocumentSnapshot.ref
 
-    auth.signInAnonymously()
-      .then(async () => {
-        console.log('signedin')
-        // Signed in..
-        let docRef
-        docRef = await db.collection("channels").add({})
+          joinCall(queryDocumentSnapshot.ref.id)
+        } else {
+          console.log("No document corresponding to the query!");
+          db.collection('channels').add({}).then(ref => {
+            channel.current = ref
+            startCall(ref)
 
-        channel.current = docRef.id
-        axios.post(`${api}rooms/`, { peerId: docRef.id }).then(res => {
-          console.log('data', res)
-          if (res.data.connectTo != docRef.id) {
-            docRef.delete()
-            channel.current = res.data.connectTo
-            joinCall(res.data.connectTo)
           }
-          else startCall(docRef)
+          )
 
-        }).catch((error) => {
-          if (error && error.response && error.response.data && error.response.data.message)
-            alert(error.response.data.message)
-          else if (error && error.message)
-            alert(error.message)
-
-        });
-      })
-      .catch((error) => {
-        const errorCode = error.code;
-        const errorMessage = error.message;
-        alert(error.message)
-        // ...
+        }
       });
 
+    // channel.current = docRef.id
+    // axios.post(`${api}rooms/`, { peerId: docRef.id }).then(res => {
+    //   console.log('data', res)
+    //   if (res.data.connectTo != docRef.id) {
+    //     docRef.delete()
+    //     channel.current = res.data.connectTo
+    //     joinCall(res.data.connectTo)
+    //   }
+    //   else startCall(docRef)
+
+    // }).catch((error) => {
+    //   if (error && error.response && error.response.data && error.response.data.message)
+    //     alert(error.response.data.message)
+    //   else if (error && error.message)
+    //     alert(error.message)
+
+    // });
+
+
   }
-  return (
+  async function onAppleButtonPress() {
+    // Start the sign-in request
+    console.log("appleauth")
+
+    const appleAuthRequestResponse = await appleAuth.performRequest({
+      requestedOperation: appleAuth.Operation.LOGIN,
+      // As per the FAQ of react-native-apple-authentication, the name should come first in the following array.
+      // See: https://github.com/invertase/react-native-apple-authentication#faqs
+      requestedScopes: [appleAuth.Scope.FULL_NAME, appleAuth.Scope.EMAIL],
+    });
+    console.log("appleauth", appleAuthRequestResponse)
+    // Ensure Apple returned a user identityToken
+    if (!appleAuthRequestResponse.identityToken) {
+      throw new Error('Apple Sign-In failed - no identify token returned');
+    }
+
+    // Create a Firebase credential from the response
+    const { identityToken, nonce } = appleAuthRequestResponse;
+    const appleCredential = auth.AppleAuthProvider.credential(identityToken, nonce);
+    console.log(appleCredential)
+
+    // Sign the user in with the credential
+    auth().signInWithCredential(appleCredential).then((user) => {
+      logoOff()
+      loginOff(user)
+      setTimeout(() => setLoggedIn(user), 250)
+    });
+  }
+  async function onGoogleButtonPress() {
+    console.log("gooogle 1")
+    // Check if your device supports Google Play
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    // Get the users ID token
+    console.log("gooogle 2")
+
+    GoogleSignin.signIn().then(idToken => {
+      console.log("gooogle 3")
+      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+      console.log("gooogle 4")
+      console.log(googleCredential)
+      // auth().signInWithCredential(googleCredential).then(res => {
+      //   console.log("gooogle 5")
+      //   setLoggedIn(true)
+      // }).catch(
+      //   (err) => {
+      //     console.log("gooogle 5 error")
+      //     alert(err)
+      //   }
+      // )
+      var updatedCred = JSON.parse(JSON.stringify(googleCredential))
+      updatedCred.token = googleCredential.token.idToken
+      console.log(updatedCred)
+      auth().signInWithCredential(updatedCred).then((user) => {
+        logoOff()
+        loginOff(user)
+        setTimeout(() => setLoggedIn(user), 250)
+      });
+
+    }).catch(error => {
+      console.log("gooogle 3 error")
+
+      console.log(error)
+    })
+
+
+    // Sign-in the user with the credential
+  }
+  function showmenu() {
+    Animated.timing(menuOpacity, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: false,
+    }).start()
+
+  }
+  function hidemenu() {
+    Animated.timing(menuOpacity, {
+      toValue: 0,
+      duration: 1000,
+      useNativeDriver: false,
+    }).start()
+
+  }
+  function hideSettings() {
+    Animated.timing(settingOpacity, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: false,
+    }).start()
+  }
+  function showSettings() {
+    Animated.timing(settingOpacity, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: false,
+    }).start()
+  }
+  function expandMenu(callback = () => { }) {
+
+
+    Animated.parallel([Animated.timing(physButtonRadius, {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: false,
+    }),
+    Animated.timing(physButtonSizeHeight, {
+      toValue: 1 * Dimensions.get('screen').height,
+      duration: 300,
+      useNativeDriver: false,
+    }),
+    Animated.timing(physButtonSizeWidth, {
+      toValue: 1 * Dimensions.get('screen').width,
+      duration: 300,
+      useNativeDriver: false,
+    }),
+
+    ]).start(
+      callback()
+    )
+
+
+
+  }
+  function compressMenu() {
+    console.log('compress menu')
+
+    Animated.timing(physButtonSizeHeight, {
+      toValue: .39 * Dimensions.get('screen').height,
+      duration: 500,
+      useNativeDriver: false,
+    }).start(),
+      Animated.timing(physButtonSizeWidth, {
+        toValue: .39 * Dimensions.get('screen').height,
+        duration: 500,
+        useNativeDriver: false,
+      }).start()
+    Animated.timing(physButtonRadius, {
+      toValue: 1 * Dimensions.get('screen').height,
+      duration: 500,
+      useNativeDriver: false,
+    }).start()
+  }
+  return (<>
+
     <View style={styles.container}>
       {loggedIn ?
         <>
+
+
+
           <Pressable
             style={{
               zIndex: 1,
@@ -585,21 +1014,66 @@ export default function Main() {
                 borderWidth: 1,
               }
             }}
+            disabled={menuOpen || newUser || disableButton}
             onPress={() => {
 
               if (shadow3opacity._value > 0 || shadow2opacity._value > 0) {
-                stopButton()
+                if (channel.current)
+                  stopButton()
               }
               else {
-                startSpin()
-                startSpinOpp()
-                enterQueue()
+                if (!channel.current) {
+                  setDisableButton()
+                  startSpin()
+                  startSpinOpp()
+                  enterQueue()
+                }
+
 
               }
             }}>
             <View style={{ zIndex: 2, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
 
-              <Animated.View style={[styles.initButton, { height: physButtonSize, width: physButtonSize }]}>
+              <Animated.View style={[styles.initButton, {
+                alignItems: "center",
+                height: physButtonSizeHeight, width: physButtonSizeWidth, shadowColor: '#000', borderRadius: physButtonRadius,
+                shadowOffset: {
+                  width: 0,
+                  height: 1,
+                },
+                shadowOpacity: 0.22,
+                shadowRadius: 2.22,
+
+                // Android
+                elevation: 3,
+              }]}>
+                {openSettings == 'settings' &&
+                  <>{menuOpen && <SettingsMenu
+                    setLogoutAnim={setLogoutAnim}
+                    setLoggedIn={setLoggedIn}
+                    showSettings={showSettings}
+                    loggedIn={loggedIn}
+                    setNewUser={setNewUser}
+                    newUser={newUser}
+                    menuOpen={menuOpen}
+                    setMenuOpen={setMenuOpen}
+                    menuOpacity={menuOpacity}
+                    onChangeInterestText={onChangeInterestText} onChangeInterests={onChangeInterests}
+                    interests={interests}
+                    name={name}
+                    onChangeName={onChangeName}
+                    interestText={interestText}
+                  ></SettingsMenu>}</>}
+                {openSettings == 'report' &&
+
+                  <>{menuOpen && <ReportMenu
+                    showSettings={showSettings}
+
+                    menuOpen={menuOpen}
+                    setMenuOpen={setMenuOpen}
+                    menuOpacity={menuOpacity}
+                  ></ReportMenu>}</>
+                }
 
               </Animated.View>
             </View >
@@ -614,7 +1088,7 @@ export default function Main() {
               </Animated.View>
             </View >
 
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ zIndex: 1, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
 
               <Animated.View style={[styles.regShadow, { top: shadow1height, left: shadow1width, opacity: darkShadowOpacity }]}>
                 <GreyGlow />
@@ -647,7 +1121,7 @@ export default function Main() {
               </Animated.View>
 
             </View > */}
-          </Pressable>
+          </Pressable >
           <Animated.View style={{ opacity: videoOpacity }}>
             {remoteStream && <View style={{ height: (.5 * (Dimensions.get('window').height)), width: (1 * (Dimensions.get('window').width)), overflow: 'hidden' }}>
               <RTCView
@@ -673,39 +1147,131 @@ export default function Main() {
           </Animated.View >
         </> :
 
-        < View style={styles.container} >
+        <View style={styles.container} >
+          {phone && !confirm &&
+            <Animated.View style={{ zIndex: 2, width: 50, position: 'absolute', right: (.35 * Dimensions.get('window').width), top: 80, opacity: backButtonOpacity }} >< Pressable onPress={() => {
+              backButtonOff();
+              phoneOff();
+              loginOn();
+              setPhone(false);
+
+
+            }}>
+              <Icon
+                color={'rgba(111,111,111,1)'}
+                name={'chevron-left'}
+                type="font-awesome"
+              />
+            </Pressable >
+            </Animated.View>
+          }
 
 
 
 
-          <Text style={styles.logo}>Buzzr.</Text>
-          <TextInput
-            style={styles.input}
-            onChangeText={(t) => formatPhoneNumber(t)}
-            value={formatted}
-            placeholder='Phone Number'
-            placeholderTextColor='rgba(0, 0, 0, .5)'
-            textAlign='center'
-          />
+          <Animated.Text style={[styles.logo, { opacity: logoOpacity, zIndex: 3 }]}>Buzzr.</Animated.Text>
+          {!phone ?
+            <Animated.View style={{ position: 'absolute', top: '35%', opacity: loginOpacity, zIndex: 2 }}>
+              <SignInButton icon={'hashtag'} bgColor="#e0e0e0" textColor={'rgba(111,111,111,1)'} text='Sign in with Phone' callback={() => { setPhone(true); loginOff(); phoneOn(); backButtonOn() }}></SignInButton>
+              <SignInButton icon={'apple'} textColor="'rgba(80,80,80,1)" bgColor={'rgba(200,200,200,1)'} text='Sign in with Apple' callback={onAppleButtonPress}></SignInButton>
+
+              <SignInButton icon={'google'} textColor="#e0e0e0" bgColor={'rgba(111,111,111,1)'} text='Sign in with Google' callback={onGoogleButtonPress}></SignInButton>
+            </Animated.View > :
+            <View style={{ position: 'absolute', top: '40%', zIndex: 2 }}>
+              {!confirm ?
+                <Animated.View style={{ opacity: phonenumOpacity }}>
+                  <TextInput
+                    style={styles.input}
+                    onChangeText={(t) => formatPhoneNumber(t)}
+                    value={formatted}
+                    placeholder='Phone Number'
+                    placeholderTextColor='rgba(0, 0, 0, .5)'
+                    textAlign='center'
+                  />
 
 
-          {load ? <ActivityIndicator style={{
-            marginTop: (.025 * (Dimensions.get('window').width + 1400)),
-          }} /> : <Pressable style={styles.button} onPress={() => {
-            onChangeNumber('')
-            phoneSignIn('+1 916-705-8486')
-          }}>
-            <Text style={styles.loginButton}>Send Login Code.</Text>
-          </Pressable>}
+                  {load ? <ActivityIndicator style={{
+                    marginTop: (.025 * (Dimensions.get('window').width + 1400)),
+                  }} /> : <Pressable style={styles.button} onPress={() => {
+                    onChangeNumber('')
+                    phoneSignIn('+1 916-705-8486')
+                  }}>
+                    <Text style={[styles.loginButton, { textAlign: 'center' }]}>Send Login Code.</Text>
+                  </Pressable>}</Animated.View > :
+                <Animated.View style={{ opacity: confirmCodeOpacity }}>
+                  <CodeCells setCode={setCode} code={code}></CodeCells>
+                  {load ? <ActivityIndicator style={{
+                    marginTop: (.025 * (Dimensions.get('window').width + 1400)),
+                  }} /> : <Pressable style={styles.button} onPress={() => {
+
+                    confirmCode()
+                  }}>
+                    <Text style={[styles.loginButton, { textAlign: 'center' }]}>Confirm.</Text>
+                  </Pressable>}</Animated.View >
+
+              }
+            </View>
+          }
+
+          <Animated.View style={[styles.initButton, {
+            zIndex: 1,
+            opacity: 1,
+            flex: 1, alignItems: "center", justifyContent: 'center',
+            height: physButtonSizeHeight, width: physButtonSizeWidth, shadowColor: '#000', borderRadius: physButtonRadius,
+            shadowOffset: {
+              width: 0,
+              height: 1,
+            },
+            shadowOpacity: 0.22,
+            shadowRadius: 2.22,
+
+            // Android
+            elevation: 3,
+          }]}>
 
 
+          </Animated.View>
+          <Animated.View style={[{ height: blueLightSize, width: blueLightSize, opacity: 1, zIndex: 0, }]}>
+            <BlueGlow />
 
+          </Animated.View>
 
         </View >
-      }
 
+      }
+      < Animated.View style={{ zIndex: 1, opacity: settingOpacity, zIndex: 5, position: "absolute", top: 70, left: .1 * Dimensions.get('window').width, flexDirection: 'row', flex: 1, justifyContent: 'center', alignItems: 'center' }} onPress={() => setPhone(false)}>
+        <Icon
+          color={'rgba(150,150,150,1)'}
+          name={'settings-outline'}
+          type="ionicon"
+          size={30}
+          onPress={() => {
+            hideSettings()
+            setOpenSettings('settings');
+            setMenuOpen(true)
+          }}
+          disabled={!idle || newUser || openSettings == 'report'}
+          disabledStyle={{ backgroundColor: 'none' }}
+        />
+      </Animated.View  >
+      < Animated.View style={{ zIndex: 1, opacity: settingOpacity, zIndex: 5, position: "absolute", top: 70, right: .1 * Dimensions.get('window').width, flexDirection: 'row', flex: 1, justifyContent: 'center', alignItems: 'center' }} >
+        <Icon
+          color={'rgba(150,150,150,1)'}
+          name={'flag-outline'}
+          type="ionicon"
+          size={30}
+          onPress={() => {
+
+            hideSettings()
+            setOpenSettings('report');
+            setMenuOpen(true)
+          }}
+          disabled={!idle || newUser || openSettings == 'settings'}
+          disabledStyle={{ backgroundColor: 'none' }}
+        />
+      </Animated.View >
     </View >
-  );
+  </>);
 }
 
 const styles = StyleSheet.create({
@@ -778,8 +1344,8 @@ const styles = StyleSheet.create({
 
     borderWidth: 2,
     padding: 10,
-    color: 'black',
-    borderColor: 'rgba(0, 0, 0, 1)',
+    color: 'rgba(111, 111, 111, 1)',
+    borderColor: 'rgba(111, 111, 111, 1)',
   },
   loginButton: {
     marginTop: (.025 * (Dimensions.get('window').width + 1400)),
@@ -790,7 +1356,8 @@ const styles = StyleSheet.create({
     color: 'rgba(0,0,0,.5)',
   },
   logo: {
-    marginBottom: (.02 * (Dimensions.get('window').width + 1400)),
+    position: 'absolute',
+    top: '20%',
 
     fontSize: (.03 * (Dimensions.get('window').width + 1400)),
     fontWeight: 'bold',

@@ -20,4 +20,4 @@ const firebaseConfig = {
 // export const db = getFirestore(app);
 // export const storage = getStorage(app);
 export const db = firestore();
-export const auth = authorization();
+export const auth = authorization;
